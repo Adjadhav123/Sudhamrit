@@ -447,7 +447,6 @@ def update_cart():
         if quantity <= 0:
             db.session.delete(cart_item)
             db.session.commit()
-            # compute new grand total
             remaining = Cart.query.filter_by(user_id=user_id).all()
             grand_total = sum(i.product.price * i.quantity for i in remaining)
             return jsonify({'item_total': 0, 'grand_total': grand_total})
@@ -532,11 +531,6 @@ def confirm_order():
             )
             db.session.add(order_item)
 
-        
-        # for item in cart_items:
-        #     db.session.delete(item)
-
-       
         db.session.commit()
 
         flash(f'Payment successful! ₹{total_amount} paid via {payment_method}', 'success')
@@ -609,11 +603,31 @@ def test_email():
         return "Test email sent successfully! Check your inbox."
     except Exception as e:
         return f"Email sending failed: {str(e)}"
+    
+@app.route('/orders',methods=['GET','POST'])
+def orders():
+    admin_id = session.get('admin_id')
+    if not admin_id:
+        return redirect(url_for('admin_login'))
+    all_orders=Order.query.all()
+    return render_template('orders.html',orders=all_orders,admin_id=admin_id)
 
+@app.route('/marked_delivery<int:order_id>',methods=['GET','POST'])
+def marked_delivery(order_id):
+    order=Order.query.get(order_id)
+    if order:
+        order.status='Delivered'
+        try:
+            db.session.commit()
+            flash(f"Order {order_id} marked as Delivered.",'Success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error updating order status: {str(e)}",'danger')
+        return redirect(url_for('orders'))
+    return redirect(url_for('orders'))
 @app.route('/test_db')
 def test_db():
     try:
-        # Test database connectivity
         users = User.query.all()
         products = Product.query.all()
         carts = Cart.query.all()

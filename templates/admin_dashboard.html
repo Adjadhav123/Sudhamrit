@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Dashboard | Sudhamrit Dairy Farm</title>
+
+    <!-- Bootstrap & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet" />
+
+    <style>
+      body {
+        font-family: "Poppins", sans-serif;
+        background: #f8f9fa;
+      }
+
+      /* Sidebar */
+      .sidebar {
+        height: 100vh;
+        background: linear-gradient(180deg, #198754 0%, #157347 100%);
+        color: white;
+        padding-top: 25px;
+        position: fixed;
+        left: 0;
+      }
+      .sidebar h4 {
+        font-weight: 700;
+        text-align: center;
+      }
+      .sidebar a {
+        color: white;
+        display: block;
+        padding: 12px 25px;
+        margin: 6px 12px;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+        font-weight: 500;
+      }
+      .sidebar a:hover, .sidebar a.active {
+        background: rgba(255, 255, 255, 0.15);
+        text-decoration: none;
+        transform: translateX(4px);
+      }
+
+      /* Main content */
+      .content {
+        margin-left: 240px;
+        padding: 30px;
+      }
+
+      /* Cards */
+      .card {
+        border: none;
+        border-radius: 1rem;
+        transition: 0.3s ease;
+      }
+      .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+      }
+
+      /* Dashboard Stat Cards */
+      .stat-card {
+        background: white;
+        border-left: 6px solid #198754;
+        border-radius: 15px;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .stat-card i {
+        font-size: 2rem;
+        color: #198754;
+      }
+      .stat-card h4 {
+        font-weight: 700;
+        color: #212529;
+      }
+
+      /* Table */
+      .table {
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .table th {
+        background: #e9f5ee;
+      }
+      .table img {
+        height: 45px;
+        border-radius: 8px;
+      }
+
+      /* Buttons */
+      .btn-success {
+        background-color: #198754;
+        border: none;
+      }
+      .btn-success:hover {
+        background-color: #157347;
+      }
+
+      /* Modal */
+      .modal-content {
+        border-radius: 1rem;
+        border: none;
+        box-shadow: 0 5px 25px rgba(0,0,0,0.15);
+      }
+      .modal-header {
+        border-bottom: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="sidebar">
+      <h4 class="mb-4">🧈 Sudhamrit Admin</h4>
+      <a href="#" class="active"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a>
+      <a href="#"><i class="bi bi-box-seam me-2"></i> Products</a>
+      <a href="#"><i class="bi bi-cart-check me-2"></i> Orders</a>
+      <a href="#"><i class="bi bi-people me-2"></i> Customers</a>
+      <a href="#"><i class="bi bi-gear me-2"></i> Settings</a>
+      <hr class="mx-3" />
+      <a href="/admin_logout" class="text-danger"><i class="bi bi-box-arrow-right me-2"></i> Logout</a>
+    </div>
+
+    <div class="content">
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'danger' if category == 'danger' else 'warning' if category == 'warning' else 'success' }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <h3 class="fw-bold text-success mb-4">Dashboard Overview</h3>
+
+      <!-- Dashboard Cards -->
+      <div class="row g-4 mb-4">
+        <div class="col-md-3">
+          <div class="stat-card shadow-sm">
+            <div>
+              <h6 class="text-muted">Total Products</h6>
+              <h4>{{ total_products }}</h4>
+            </div>
+            <i class="bi bi-box-seam"></i>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="stat-card shadow-sm">
+            <div>
+              <h6 class="text-muted">Total Orders</h6>
+              <h4>{{ total_orders }}</h4>
+            </div>
+            <i class="bi bi-cart-check"></i>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="stat-card shadow-sm">
+            <div>
+              <h6 class="text-muted">Customers</h6>
+              <h4>{{ total_customers }}</h4>
+            </div>
+            <i class="bi bi-people"></i>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="stat-card shadow-sm">
+            <div>
+              <h6 class="text-muted">Revenue</h6>
+              <h4>₹{{ total_revenue }}</h4>
+            </div>
+            <i class="bi bi-currency-rupee"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Product Table -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+          <h5 class="fw-bold text-success mb-0">Product List</h5>
+          <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#addProductModal">
+            <i class="bi bi-plus-circle me-1"></i> Add Product
+          </button>
+        </div>
+        <div class="card-body">
+          <table class="table align-middle table-hover">
+            <thead>
+              <tr>
+                <th>Image</th>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if products %}
+                {% for product in products %}
+                  <tr>
+                    <td>
+                      <img src="{{ url_for('static', filename='images/' + (product.product_image or 'image.png')) }}" alt="{{ product.product_name }}">
+                    </td>
+                    <td class="fw-semibold">{{ product.product_name }}</td>
+                    <td>{{ product.category }}</td>
+                    <td>₹{{ product.price }}</td>
+                    <td>{{ product.stock }}</td>
+                    <td>
+                      <button class="btn btn-outline-primary btn-sm edit-btn"
+                        data-id="{{ product.product_id }}"
+                        data-name="{{ product.product_name }}"
+                        data-description="{{ product.description }}"
+                        data-category="{{ product.category }}"
+                        data-price="{{ product.price }}"
+                        data-stock="{{ product.stock }}"
+                        data-image="{{ url_for('static', filename='images/' + (product.product_image or 'image.png')) }}">
+                        <i class="bi bi-pencil"></i>
+                      </button>
+                      <a href="{{ url_for('delete_product', product_id=product.product_id) }}" class="btn btn-outline-danger btn-sm" onclick="return confirm('Are you sure you want to delete this product?')">
+                        <i class="bi bi-trash"></i>
+                      </a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="6" class="text-center text-muted">No products added yet. Add your first product!</td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Orders -->
+      <div class="card shadow-sm">
+        <div class="card-header bg-white">
+          <h5 class="fw-bold text-success mb-0">Recent Orders</h5>
+        </div>
+        <div class="card-body">
+          <ul class="list-group">
+            {% if orders %}
+              {% for order in orders %}
+                <li class="list-group-item d-flex justify-content-between align-items-start">
+                  <div>
+                    <strong>Order #{{ order.order_id }}</strong><br>
+                    <small class="text-muted">Customer: {{ order.user.username }}</small><br>
+                    <small class="text-muted">Date: {{ order.order_date.strftime('%Y-%m-%d %H:%M') }}</small><br>
+                    <strong>Items:</strong>
+                    {% for item in order.order_items %}
+                      {{ item.product.product_name }} × {{ item.quantity }}{% if not loop.last %}, {% endif %}
+                    {% endfor %}<br>
+                    <strong>Total: ₹{{ order.total_amount }}</strong>
+                  </div>
+                  <span class="badge rounded-pill 
+                    {% if order.status == 'Delivered' %}bg-success
+                    {% elif order.status == 'Pending' %}bg-warning text-dark
+                    {% elif order.status == 'Cancelled' %}bg-danger
+                    {% else %}bg-secondary{% endif %}">
+                    {{ order.status }}
+                  </span>
+                </li>
+              {% endfor %}
+            {% else %}
+              <li class="list-group-item text-center text-muted">No orders yet.</li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Product Modal -->
+    <div class="modal fade" id="addProductModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="fw-bold text-success">Add New Product</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form method="POST" action="{{ url_for('add_product') }}" enctype="multipart/form-data">
+              <div class="mb-3">
+                <label class="form-label">Product Name</label>
+                <input type="text" name="product_name" class="form-control" required />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Description</label>
+                <textarea name="description" class="form-control" rows="2"></textarea>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Category</label>
+                <select class="form-select" name="category">
+                  <option>Dairy</option>
+                  <option>Sweets</option>
+                  <option>Ice Creams</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Price</label>
+                <input type="number" name="product_price" class="form-control" required />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Stock</label>
+                <input type="number" name="stock" class="form-control" required />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Product Image</label>
+                <input type="file" name="product_image" class="form-control" />
+              </div>
+              <button type="submit" class="btn btn-success w-100">Add Product</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Update Product Modal -->
+    <div class="modal fade" id="updateProductModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="fw-bold text-success">Update Product</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form method="POST" id="updateProductForm" enctype="multipart/form-data">
+              <input type="hidden" name="product_id" id="update_product_id" />
+              <div class="mb-3">
+                <label class="form-label">Product Name</label>
+                <input type="text" name="product_name" id="update_product_name" class="form-control" required />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Description</label>
+                <textarea name="description" id="update_description" class="form-control" rows="2"></textarea>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Category</label>
+                <select class="form-select" name="category" id="update_category">
+                  <option>Dairy</option>
+                  <option>Sweets</option>
+                  <option>Ice Creams</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Price</label>
+                <input type="number" name="product_price" id="update_price" class="form-control" required />
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Stock</label>
+                <input type="number" name="stock" id="update_stock" class="form-control" required />
+              </div>
+              <div class="mb-3 text-center">
+                <img id="current_product_image" src="" class="rounded shadow-sm mb-2" width="120" style="display:none;">
+                <input type="file" name="product_image" class="form-control" id="update_image" />
+              </div>
+              <button type="submit" class="btn btn-success w-100">Update Product</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        const editButtons = document.querySelectorAll('.edit-btn');
+        const updateModal = new bootstrap.Modal(document.getElementById('updateProductModal'));
+        const updateForm = document.getElementById('updateProductForm');
+
+        editButtons.forEach(btn => {
+          btn.addEventListener('click', function () {
+            document.getElementById('update_product_id').value = this.dataset.id;
+            document.getElementById('update_product_name').value = this.dataset.name;
+            document.getElementById('update_description').value = this.dataset.description;
+            document.getElementById('update_category').value = this.dataset.category;
+            document.getElementById('update_price').value = this.dataset.price;
+            document.getElementById('update_stock').value = this.dataset.stock;
+            const currentImage = document.getElementById('current_product_image');
+            currentImage.src = this.dataset.image;
+            currentImage.style.display = 'block';
+            updateForm.action = `/update_product/${this.dataset.id}`;
+            updateModal.show();
+          });
+        });
+      });
+    </script>
+  </body>
+</html>

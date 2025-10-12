@@ -44,10 +44,14 @@
 
       <div class="text-start mb-3">
         <h5 class="fw-bold">Order Summary</h5>
+        <p><strong>Order ID:</strong> #{{ order_id }}</p>
         <p><strong>Customer Name:</strong> {{ user.username }}</p>
         <p><strong>Email:</strong> {{ user.email }}</p>
         <p><strong>Payment Method:</strong> {{ payment_method }}</p>
-        <p><strong>Amount Paid:</strong> ₹{{ total }}</p>
+        {% if razorpay_payment_id %}
+        <p><strong>Transaction ID:</strong> {{ razorpay_payment_id }}</p>
+        {% endif %}
+        <p><strong>Amount Paid:</strong> ₹{{ "%.2f"|format(total) }}</p>
         <p><strong>Status:</strong> <span class="text-success fw-bold">Success</span></p>
       </div>
 

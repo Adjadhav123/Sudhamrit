@@ -45,6 +45,13 @@ mail=Mail(app)
 
 db.init_app(app)
 
+# Create tables before first request
+with app.app_context():
+    try:
+        db.create_all()
+        print("Database tables created successfully!")
+    except Exception as e:
+        print(f"Error creating database tables: {e}")
 
 @app.route('/')
 def landing():
@@ -105,7 +112,20 @@ def login():
         email=request.form.get('email')
         password=request.form.get('password')
 
-        user=User.query.filter_by(email=email).first()
+        try:
+            user=User.query.filter_by(email=email).first()
+        except Exception as e:
+            logger.error(f"Database error during login: {e}")
+            # Try to initialize database if tables don't exist
+            try:
+                db.create_all()
+                user=User.query.filter_by(email=email).first()
+            except Exception as init_error:
+                logger.error(f"Failed to initialize database: {init_error}")
+                login_message="Database error. Please try again later."
+                flash(login_message,'danger')
+                return render_template('login.html',login_message=login_message)
+
         if user and check_password_hash(user.password,password):
             session['user_id'] = user.user_id
             session['username'] = user.username
@@ -550,16 +570,27 @@ def payment_success():
             flash('Cart is empty or order already processed.', 'warning')
             return redirect(url_for('products'))
 
-        # Save Payment in DB with Razorpay details
-        new_payment = Payment(
-            user_id=user_id,
-            amount=total_amount,
-            payment_method='Razorpay',
-            status='Completed',
-            razorpay_order_id=data['razorpay_order_id'],
-            razorpay_payment_id=data['razorpay_payment_id'],
-            razorpay_signature=data['razorpay_signature']
-        )
+        # Save Payment in DB with Razorpay details (with fallback for missing columns)
+        try:
+            new_payment = Payment(
+                user_id=user_id,
+                amount=total_amount,
+                payment_method='Razorpay',
+                status='Completed',
+                razorpay_order_id=data['razorpay_order_id'],
+                razorpay_payment_id=data['razorpay_payment_id'],
+                razorpay_signature=data['razorpay_signature']
+            )
+        except Exception as column_error:
+            # Fallback for databases without Razorpay columns
+            logger.warning(f"Razorpay columns not available, using basic payment record: {column_error}")
+            new_payment = Payment(
+                user_id=user_id,
+                amount=total_amount,
+                payment_method='Razorpay',
+                status='Completed'
+            )
+            
         db.session.add(new_payment)
         db.session.flush()
 
@@ -851,5 +882,9 @@ def test_db():
         
 if __name__=='__main__':
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+            print("✅ Database tables created successfully!")
+        except Exception as e:
+            print(f"❌ Error creating database tables: {e}")
     app.run(debug=True)

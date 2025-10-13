@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Find Location</title>
+  <script src="https://maps.googleapis.com/maps/api/js?key={{ api_key }}"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f4f4f4;
+    }
+    h2 {
+      margin-top: 20px;
+    }
+    #map {
+      height: 400px;
+      width: 80%;
+      margin: 20px auto;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <h2>🌍 Delivery Location Finder</h2>
+  <input type="text" id="address" placeholder="Enter address (e.g., Taj Mahal, Agra)">
+  <button onclick="getLocation()">Find Location</button>
+
+  <div id="map"></div>
+
+  <script>
+    let map;
+    let marker;
+
+    function initMap(lat = 20.5937, lng = 78.9629) { // default: India
+      const defaultLoc = { lat, lng };
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 5,
+        center: defaultLoc,
+      });
+    }
+
+    async function getLocation() {
+      const address = document.getElementById('address').value.trim();
+      if (!address) {
+        alert('Please enter an address!');
+        return;
+      }
+
+      const response = await fetch('/get_location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const { latitude, longitude } = data;
+        const loc = { lat: latitude, lng: longitude };
+
+        map.setCenter(loc);
+        map.setZoom(14);
+
+        if (marker) marker.setMap(null);
+        marker = new google.maps.Marker({
+          position: loc,
+          map: map,
+          title: "Delivery Location",
+        });
+      } else {
+        alert(data.error || 'Unable to find location');
+      }
+    }
+
+    window.onload = initMap;
+  </script>
+</body>
+</html>
+

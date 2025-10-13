@@ -51,6 +51,26 @@
         <p><strong>Payment Method:</strong> {{ payment_method }}</p>
         <p><strong>Amount:</strong> ₹{{ "%.2f"|format(total) }}</p>
         <p><strong>Status:</strong> <span class="text-success fw-bold">Order Confirmed</span></p>
+        
+        <!-- Order Items Details -->
+        {% if order_items %}
+        <hr class="my-3">
+        <h6 class="fw-bold mb-2">Order Items:</h6>
+        <div class="order-items">
+          {% for item in order_items %}
+          <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+            <div>
+              <span class="fw-medium">{{ item.product.product_name }}</span>
+              <small class="text-muted d-block">{{ item.product.category }}</small>
+            </div>
+            <div class="text-end">
+              <span class="fw-medium">{{ item.quantity }} x ₹{{ "%.2f"|format(item.price_per_item) }}</span>
+              <small class="text-muted d-block">₹{{ "%.2f"|format(item.quantity * item.price_per_item) }}</small>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
 
       <a href="{{ url_for('home', user_id=user.user_id) }}" class="btn btn-home mt-3 px-4">Back to Home</a>

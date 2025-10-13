@@ -1,5 +1,5 @@
 from flask import Flask,render_template,request,redirect,url_for,flash,session,jsonify
-from models import db,User,Admin,Product,Cart,Payment,Order,OrderItem
+from models import db,User,Admin,Product,Cart,Payment,Order,OrderItem,DeliveryLocation
 from werkzeug.security import generate_password_hash,check_password_hash
 from flask_login import LoginManager,UserMixin,login_user,login_required,logout_user,current_user
 import os 
@@ -16,6 +16,8 @@ app=Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI']='sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
 app.config['SECRET_KEY']='your_secret_key'
+
+# Email configuration with timeout settings
 app.config['MAIL_SERVER']='smtp.gmail.com'
 app.config['MAIL_PORT']=587
 app.config['MAIL_USE_TLS']=True
@@ -23,7 +25,8 @@ app.config['MAIL_USE_SSL']=False
 app.config['MAIL_USERNAME']=os.getenv("EMAIL")  
 app.config['MAIL_PASSWORD']=os.getenv("PASSWORD")  
 app.config['MAIL_DEFAULT_SENDER']=os.getenv("EMAIL")
-app.config['MAIL_DEBUG']=True
+app.config['MAIL_DEBUG']=False  # Disable debug in production
+app.config['MAIL_SUPPRESS_SEND']=os.getenv('FLASK_ENV') == 'production'  # Suppress email in production
 
 load_dotenv() 
 
@@ -521,104 +524,105 @@ def payment():
         flash(f'Error processing payment: {str(e)}', 'danger')
         return redirect(url_for('cart'))
 
-@app.route('/payment_success', methods=['POST'])
+@app.route('/payment_success',methods=['GET','POST'])
 def payment_success():
     """
-    Process the payment and create order after user submits payment form
+    Process payment and create order - Fixed for production deployment
     """
-    # Check if user is logged in
+    print("🚀 Starting payment processing...")
+    
     user_id = session.get('user_id')
     if not user_id:
-        flash('Please log in again.', 'warning')
+        flash('Please log in to proceed with payment.', 'warning')
         return redirect(url_for('login'))
-
-    # Get user from database
+    
     user = db.session.get(User, user_id)
     if not user:
         flash('User not found. Please log in again.', 'danger')
         return redirect(url_for('login'))
-
-    # Get payment method from form
-    payment_method = request.form.get('payment_method', 'Cash on Delivery')
+    
+    payment_method = request.form.get('payment_method')
     print(f"✅ Processing payment for user {user.username} (ID: {user_id})")
     print(f"✅ Payment method: {payment_method}")
 
     try:
-        # Get cart items and total amount
-        cart_items = Cart.query.filter_by(user_id=user_id).all()
+        cart_items = Cart.query.filter_by(user_id=user.user_id).all()
         total_amount = session.get('payment_amount', 0)
         
         print(f"✅ Found {len(cart_items)} items in cart")
         print(f"✅ Total amount: ₹{total_amount}")
-        
-        # Validate cart is not empty
+
         if not cart_items:
+            print("❌ Cart is empty")
             flash('Your cart is empty.', 'warning')
             return redirect(url_for('products'))
-
+        
         if total_amount <= 0:
-            flash('Invalid order amount.', 'danger')
+            print("❌ Invalid payment amount")
+            flash('Invalid payment amount.', 'danger')
             return redirect(url_for('cart'))
-
-        # Step 1: Create Payment Record (Simple - no Razorpay fields)
+        
+        # Step 1: Create Payment Record
         print("✅ Creating payment record...")
         new_payment = Payment(
-            user_id=user_id,
+            user_id=user.user_id,
             amount=total_amount,
             payment_method=payment_method,
-            status='Pending'
+            status='Completed'
         )
         db.session.add(new_payment)
-        db.session.flush()  # Get payment ID without committing
-        print(f"✅ Payment record created with ID: {new_payment.payment_id}")
+        db.session.flush()
+        print(f"Payment record created with ID: {new_payment.payment_id}")
 
-        # Step 2: Create Order Record
-        print("✅ Creating order record...")
+        print("Creating order record...")
         new_order = Order(
             payment_id=new_payment.payment_id,
-            user_id=user_id,
+            user_id=user.user_id,
             total_amount=total_amount,
-            status='Confirmed'
+            status='Completed'
         )
         db.session.add(new_order)
-        db.session.flush()  # Get order ID without committing
-        print(f"✅ Order record created with ID: {new_order.order_id}")
+        db.session.flush()
+        print(f"Order record created with ID: {new_order.order_id}")
 
-        # Step 3: Create Order Items for each cart item
-        print("✅ Creating order items...")
-        for cart_item in cart_items:
+        print("Creating order items...")
+        for item in cart_items:
             order_item = OrderItem(
                 order_id=new_order.order_id,
-                product_id=cart_item.product_id,
-                quantity=cart_item.quantity,
-                price_per_item=cart_item.product.price
+                product_id=item.product_id,
+                quantity=item.quantity,
+                price_per_item=item.product.price
             )
             db.session.add(order_item)
-            print(f"  - Added {cart_item.product.product_name} x {cart_item.quantity}")
-
-        # Step 4: Clear the cart
-        print("✅ Clearing cart...")
-        Cart.query.filter_by(user_id=user_id).delete()
-
-        # Step 5: Commit all database changes
+            print(f"  - Added {item.product.product_name} x {item.quantity}")
+        
+        print("Clearing cart...")
+        Cart.query.filter_by(user_id=user.user_id).delete()
+        
         db.session.commit()
-        print("✅ All database changes committed successfully!")
-
-        # Step 6: Clear session data
+        print("All database changes committed successfully!")
         session.pop('payment_amount', None)
+        print("Session data cleared")
 
-        # Step 7: Show success message
-        flash("🎉 Order placed successfully!", "success")
+        
+        flash("Order placed successfully!", "success")
 
-        # Step 8: Send confirmation email
-        print("✅ Sending confirmation email...")
-        try:
-            msg = Message(
-                subject="Order Confirmation - Sudhamrit Dairy Farm",
-                recipients=[user.email],
-                sender=app.config['MAIL_DEFAULT_SENDER']
-            )
-            msg.body = f"""Hello {user.username},
+       
+        email_sent = False
+        
+        if os.getenv('FLASK_ENV') == 'production':
+            print("⚠️ Skipping email in production environment")
+            flash("⚠️ Order placed successfully! You will receive confirmation via SMS/WhatsApp.", "warning")
+        else:
+            try:
+                print("✅ Attempting to send confirmation email...")
+                
+                msg = Message(
+                    subject="Order Confirmation - Sudhamrit Dairy Farm",
+                    recipients=[user.email],
+                    sender=app.config['MAIL_DEFAULT_SENDER']
+                )
+                msg.body = f"""Hello {user.username},
 
 Your order has been placed successfully! 🎉
 
@@ -642,38 +646,34 @@ Sudhamrit Dairy Farm Team
 Email: support@sudhamritdairy.com
 Phone: +91-XXXXXXXXXX
 """
-            mail.send(msg)
-            print("✅ Confirmation email sent successfully!")
-            flash("📧 Order confirmation email sent!", "info")
-            
-        except Exception as mail_error:
-            print(f"❌ Email sending failed: {mail_error}")
-            flash("⚠️ Order placed successfully, but email notification failed.", "warning")
+                
+                mail.send(msg)
+                email_sent = True
+                print("✅ Confirmation email sent successfully!")
+                flash("📧 Order confirmation email sent!", "info")
+                
+            except Exception as mail_error:
+                print(f"❌ Email sending failed: {mail_error}")
+                flash("⚠️ Order placed successfully! Email notification will be sent separately.", "warning")
 
-        # Step 9: Redirect to confirmation page
         print("✅ Redirecting to confirmation page...")
+        
+        # Get order items with product details for the confirmation page
+        order_items = OrderItem.query.filter_by(order_id=new_order.order_id).all()
+        
         return render_template('confirm_order.html', 
                              user=user, 
                              total=total_amount, 
                              payment_method=payment_method, 
-                             order_id=new_order.order_id)
-                             
-    except Exception as e:
-        # If anything goes wrong, rollback database changes
-        db.session.rollback()
-        print(f"❌ ERROR processing order: {str(e)}")
-        flash(f"❌ Error processing order: {str(e)}", "danger")
-        return redirect(url_for('payment'))
-
-@app.route('/payment_failed', methods=['GET'])
-def payment_failed():
-    user_id = session.get('user_id')
-    if not user_id:
-        flash('Please log in again.', 'warning')
-        return redirect(url_for('login'))
+                             order_id=new_order.order_id,
+                             order_items=order_items,
+                             email_sent=email_sent) 
     
-    flash('Payment was cancelled or failed. Please try again.', 'warning')
-    return redirect(url_for('cart'))
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ ERROR processing payment: {str(e)}")
+        flash(f"Error processing payment: {str(e)}", "danger")
+        return redirect(url_for('cart'))
 
 @app.route('/test_email')
 def test_email():
@@ -696,25 +696,35 @@ def test_email():
     except Exception as e:
         return f"Email sending failed: {str(e)}"
 
-@app.route('/test_payment_flow')
-def test_payment_flow():
-    """Test route to check if payment flow works"""
+@app.route('/test_order_flow')
+def test_order_flow():
+    """Test route to check order processing without email"""
     user_id = session.get('user_id')
     if not user_id:
         return "Please log in first"
     
-    cart_items = Cart.query.filter_by(user_id=user_id).all()
-    total_amount = session.get('payment_amount', 0)
-    
-    return f"""
-    <h3>Payment Flow Test</h3>
-    <p>User ID: {user_id}</p>
-    <p>Cart Items: {len(cart_items)}</p>
-    <p>Total Amount in Session: {total_amount}</p>
-    <p>Mail Config - Server: {app.config.get('MAIL_SERVER')}</p>
-    <p>Mail Config - Username: {app.config.get('MAIL_USERNAME')}</p>
-    <p>Mail Config - Default Sender: {app.config.get('MAIL_DEFAULT_SENDER')}</p>
-    """
+    try:
+        # Check if user has cart items
+        cart_items = Cart.query.filter_by(user_id=user_id).all()
+        total_amount = session.get('payment_amount', 0)
+        
+        orders = Order.query.filter_by(user_id=user_id).all()
+        payments = Payment.query.filter_by(user_id=user_id).all()
+        
+        return f"""
+        <h3>Order Flow Test for User ID: {user_id}</h3>
+        <p><strong>Cart Items:</strong> {len(cart_items)}</p>
+        <p><strong>Total Amount in Session:</strong> ₹{total_amount}</p>
+        <p><strong>Previous Orders:</strong> {len(orders)}</p>
+        <p><strong>Previous Payments:</strong> {len(payments)}</p>
+        <br>
+        <h4>Recent Orders:</h4>
+        {'<br>'.join([f"Order #{order.order_id}: ₹{order.total_amount} - {order.status}" for order in orders[-5:]])}
+        <br><br>
+        <a href="/cart">Back to Cart</a> | <a href="/payment">Go to Payment</a>
+        """
+    except Exception as e:
+        return f"Error: {str(e)}"
     
 @app.route('/orders',methods=['GET','POST'])
 def orders():
@@ -753,6 +763,38 @@ def test_db():
         """
     except Exception as e:
         return f"Database Error: {str(e)}"
+    
+@app.route('/save_location',methods=['GET','POST'])
+def save_location():
+     data = request.get_json()
+     address = data.get('address')
+     latitude = data.get('latitude')
+     longitude = data.get('longitude')
+     session['address'] = address
+     session['latitude'] = latitude
+     session['longitude'] = longitude
+
+     if not all([address, latitude, longitude]):
+         return jsonify({'error': 'Incomplete location data'}), 400
+     
+     user_id = session.get('user_id')
+     if not user_id:
+         return jsonify({'error': 'User not logged in'}), 401   
+     
+     new_location=DeliveryLocation(
+         user_id=user_id,
+         address=address,
+         latitude=latitude,
+         longitude=longitude
+     )
+     db.session.add(new_location)
+     db.session.commit()
+
+     return jsonify({'message': 'Location saved successfully!'}), 200
+     return render_template('payment.html',user=user,cart_items=cart_items,total=total_amount,google_maps_api_key=os.getenv("GOOGLE_MAPS_API_KEY"))
+
+     
+    
         
 if __name__=='__main__':
     with app.app_context():

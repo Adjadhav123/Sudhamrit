@@ -73,3 +73,14 @@ class OrderItem(db.Model):
     price_per_item = db.Column(db.Float,nullable=False)
 
     product = db.relationship('Product',backref=db.backref('order_items',lazy=True))
+
+class DeliveryLocation(db.Model):
+    location_id = db.Column(db.Integer,primary_key=True)
+    user_id = db.Column(db.Integer,db.ForeignKey('user.user_id'),nullable=False)
+    address = db.Column(db.String(200),nullable=False)
+    latitude = db.Column(db.Float,nullable=False)
+    longitude = db.Column(db.Float,nullable=False)
+    added_at = db.Column(db.DateTime,default=datetime.utcnow)
+
+    user = db.relationship('User',backref=db.backref('delivery_locations',lazy=True))
+    

@@ -5,7 +5,6 @@ from flask_login import LoginManager,UserMixin,login_user,login_required,logout_
 import os 
 from flask_mail import Mail,Message
 import os 
-import razorpay
 from dotenv import load_dotenv 
 import logging
 
@@ -27,17 +26,6 @@ app.config['MAIL_DEFAULT_SENDER']=os.getenv("EMAIL")
 app.config['MAIL_DEBUG']=True
 
 load_dotenv() 
-
-RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
-RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
-
-# Validate Razorpay credentials
-if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
-    logger.warning("Razorpay credentials not found in environment variables")
-    RAZORPAY_KEY_ID = "dummy_key"
-    RAZORPAY_KEY_SECRET = "dummy_secret"
-
-razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 mail=Mail(app)
 
@@ -522,79 +510,70 @@ def payment():
             return redirect(url_for('products'))
         
         total_amount = sum(item.product.price * item.quantity for item in cart_items)
-        amount_paise = int(total_amount * 100)  # Convert to paise and ensure it's an integer
-
-        # Create Razorpay order
-        razorpay_order = razorpay_client.order.create({
-            'amount': amount_paise,
-            'currency': 'INR',
-            'payment_capture': '1'  # Auto capture payment
-        })
-
-        # Store order ID in session for verification later
-        session['razorpay_order_id'] = razorpay_order['id']
+        
         session['payment_amount'] = total_amount
         
         return render_template('payment.html', 
                              user=user, 
                              cart_items=cart_items, 
-                             total=total_amount,
-                             razorpay_order_id=razorpay_order['id'], 
-                             razorpay_key_id=RAZORPAY_KEY_ID)
+                             total=total_amount)
     except Exception as e:
         flash(f'Error processing payment: {str(e)}', 'danger')
         return redirect(url_for('cart'))
 
 @app.route('/payment_success', methods=['POST'])
 def payment_success():
+    """
+    Process the payment and create order after user submits payment form
+    """
+    # Check if user is logged in
     user_id = session.get('user_id')
     if not user_id:
         flash('Please log in again.', 'warning')
         return redirect(url_for('login'))
 
+    # Get user from database
     user = db.session.get(User, user_id)
-    data = request.form
+    if not user:
+        flash('User not found. Please log in again.', 'danger')
+        return redirect(url_for('login'))
+
+    # Get payment method from form
+    payment_method = request.form.get('payment_method', 'Cash on Delivery')
+    print(f"✅ Processing payment for user {user.username} (ID: {user_id})")
+    print(f"✅ Payment method: {payment_method}")
 
     try:
-        razorpay_client.utility.verify_payment_signature({
-            'razorpay_order_id': data['razorpay_order_id'],
-            'razorpay_payment_id': data['razorpay_payment_id'],
-            'razorpay_signature': data['razorpay_signature']
-        })
-
-    
+        # Get cart items and total amount
         cart_items = Cart.query.filter_by(user_id=user_id).all()
-        total_amount = session.get('payment_amount', 0)  # Get amount from session
+        total_amount = session.get('payment_amount', 0)
         
+        print(f"✅ Found {len(cart_items)} items in cart")
+        print(f"✅ Total amount: ₹{total_amount}")
+        
+        # Validate cart is not empty
         if not cart_items:
-            flash('Cart is empty or order already processed.', 'warning')
+            flash('Your cart is empty.', 'warning')
             return redirect(url_for('products'))
 
-        # Save Payment in DB with Razorpay details (with fallback for missing columns)
-        try:
-            new_payment = Payment(
-                user_id=user_id,
-                amount=total_amount,
-                payment_method='Razorpay',
-                status='Completed',
-                razorpay_order_id=data['razorpay_order_id'],
-                razorpay_payment_id=data['razorpay_payment_id'],
-                razorpay_signature=data['razorpay_signature']
-            )
-        except Exception as column_error:
-            # Fallback for databases without Razorpay columns
-            logger.warning(f"Razorpay columns not available, using basic payment record: {column_error}")
-            new_payment = Payment(
-                user_id=user_id,
-                amount=total_amount,
-                payment_method='Razorpay',
-                status='Completed'
-            )
-            
-        db.session.add(new_payment)
-        db.session.flush()
+        if total_amount <= 0:
+            flash('Invalid order amount.', 'danger')
+            return redirect(url_for('cart'))
 
-        # Create Order
+        # Step 1: Create Payment Record (Simple - no Razorpay fields)
+        print("✅ Creating payment record...")
+        new_payment = Payment(
+            user_id=user_id,
+            amount=total_amount,
+            payment_method=payment_method,
+            status='Pending'
+        )
+        db.session.add(new_payment)
+        db.session.flush()  # Get payment ID without committing
+        print(f"✅ Payment record created with ID: {new_payment.payment_id}")
+
+        # Step 2: Create Order Record
+        print("✅ Creating order record...")
         new_order = Order(
             payment_id=new_payment.payment_id,
             user_id=user_id,
@@ -602,9 +581,11 @@ def payment_success():
             status='Confirmed'
         )
         db.session.add(new_order)
-        db.session.flush()
+        db.session.flush()  # Get order ID without committing
+        print(f"✅ Order record created with ID: {new_order.order_id}")
 
-        # Create Order Items
+        # Step 3: Create Order Items for each cart item
+        print("✅ Creating order items...")
         for cart_item in cart_items:
             order_item = OrderItem(
                 order_id=new_order.order_id,
@@ -613,61 +594,75 @@ def payment_success():
                 price_per_item=cart_item.product.price
             )
             db.session.add(order_item)
+            print(f"  - Added {cart_item.product.product_name} x {cart_item.quantity}")
 
-        # Clear cart after successful order
+        # Step 4: Clear the cart
+        print("✅ Clearing cart...")
         Cart.query.filter_by(user_id=user_id).delete()
-        db.session.commit()
 
-        # Clear session data
-        session.pop('razorpay_order_id', None)
+        # Step 5: Commit all database changes
+        db.session.commit()
+        print("✅ All database changes committed successfully!")
+
+        # Step 6: Clear session data
         session.pop('payment_amount', None)
 
-        flash("Payment verified and order placed successfully!", "success")
+        # Step 7: Show success message
+        flash("🎉 Order placed successfully!", "success")
 
-        # Send confirmation email
+        # Step 8: Send confirmation email
+        print("✅ Sending confirmation email...")
         try:
             msg = Message(
                 subject="Order Confirmation - Sudhamrit Dairy Farm",
                 recipients=[user.email],
                 sender=app.config['MAIL_DEFAULT_SENDER']
             )
-            msg.body = f"""
-Hello {user.username},
+            msg.body = f"""Hello {user.username},
 
-Your payment of ₹{total_amount} has been received successfully!
+Your order has been placed successfully! 🎉
 
-Order Details:
-- Order ID: {new_order.order_id}
-- Payment ID: {data['razorpay_payment_id']}
-- Amount: ₹{total_amount}
-- Payment Method: Razorpay
+📋 ORDER DETAILS:
+• Order ID: #{new_order.order_id}
+• Amount: ₹{total_amount}
+• Payment Method: {payment_method}
+• Order Date: {new_order.order_date.strftime('%d/%m/%Y at %I:%M %p')}
 
-Your products will be delivered soon to:
+🚚 DELIVERY ADDRESS:
 {user.address}
 
-Thank you for shopping with Sudhamrit Dairy Farm!
+📞 CONTACT: {user.phone}
+
+Your fresh dairy products will be delivered soon!
+
+Thank you for choosing Sudhamrit Dairy Farm! 🥛
 
 Best Regards,
 Sudhamrit Dairy Farm Team
-            """
+Email: support@sudhamritdairy.com
+Phone: +91-XXXXXXXXXX
+"""
             mail.send(msg)
+            print("✅ Confirmation email sent successfully!")
+            flash("📧 Order confirmation email sent!", "info")
+            
         except Exception as mail_error:
-            print(f"Email sending failed: {mail_error}")
+            print(f"❌ Email sending failed: {mail_error}")
+            flash("⚠️ Order placed successfully, but email notification failed.", "warning")
 
+        # Step 9: Redirect to confirmation page
+        print("✅ Redirecting to confirmation page...")
         return render_template('confirm_order.html', 
                              user=user, 
                              total=total_amount, 
-                             payment_method='Razorpay', 
-                             order_id=new_order.order_id,
-                             razorpay_payment_id=data['razorpay_payment_id'])
+                             payment_method=payment_method, 
+                             order_id=new_order.order_id)
                              
-    except razorpay.errors.SignatureVerificationError:
-        db.session.rollback()
-        flash("Payment verification failed! This may be a fraudulent transaction.", "danger")
-        return redirect(url_for('payment'))
     except Exception as e:
+        # If anything goes wrong, rollback database changes
         db.session.rollback()
-        flash(f"Error processing payment: {str(e)}", "danger")
+        print(f"❌ ERROR processing order: {str(e)}")
+        flash(f"❌ Error processing order: {str(e)}", "danger")
         return redirect(url_for('payment'))
 
 @app.route('/payment_failed', methods=['GET'])
@@ -679,147 +674,6 @@ def payment_failed():
     
     flash('Payment was cancelled or failed. Please try again.', 'warning')
     return redirect(url_for('cart'))
-
-@app.route('/razorpay_webhook', methods=['POST'])
-def razorpay_webhook():
-    """
-    Handle Razorpay webhooks for payment notifications
-    This is useful for server-to-server payment confirmations
-    """
-    try:
-        # Get the request data
-        webhook_data = request.get_json()
-        
-        # Verify webhook signature (recommended for production)
-        # webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
-        # received_signature = request.headers.get('X-Razorpay-Signature')
-        
-        # Process different event types
-        event = webhook_data.get('event')
-        
-        if event == 'payment.captured':
-            # Payment was successful
-            payment_data = webhook_data.get('payload', {}).get('payment', {}).get('entity', {})
-            payment_id = payment_data.get('id')
-            order_id = payment_data.get('order_id')
-            amount = payment_data.get('amount', 0) / 100  # Convert from paise to rupees
-            
-            logger.info(f"Payment captured: {payment_id} for order: {order_id}")
-            
-            # Update payment status in database if needed
-            payment_record = Payment.query.filter_by(razorpay_payment_id=payment_id).first()
-            if payment_record:
-                payment_record.status = 'Completed'
-                db.session.commit()
-                logger.info(f"Updated payment status for payment_id: {payment_id}")
-        
-        elif event == 'payment.failed':
-            # Payment failed
-            payment_data = webhook_data.get('payload', {}).get('payment', {}).get('entity', {})
-            payment_id = payment_data.get('id')
-            logger.warning(f"Payment failed: {payment_id}")
-        
-        return jsonify({'status': 'ok'}), 200
-        
-    except Exception as e:
-        logger.error(f"Webhook error: {str(e)}")
-        return jsonify({'status': 'error', 'message': str(e)}), 400
-
-@app.route('/confirm_order', methods=['POST'])
-def confirm_order():
-    user_id = session.get('user_id')
-    if not user_id:
-        flash('Please log in to complete payment.', 'warning')
-        return redirect(url_for('login'))
-    
-    payment_method = request.form.get('payment_method')
-    card_name = request.form.get('cardName')
-    
-    try:
-        cart_items = Cart.query.filter_by(user_id=user_id).all()
-        if not cart_items:
-            flash('Your cart is empty.', 'warning')
-            return redirect(url_for('products'))
-
-        total_amount = sum(item.product.price * item.quantity for item in cart_items)
-
-        new_payment = Payment(
-            user_id=user_id,
-            amount=total_amount,
-            payment_method=payment_method,
-            status='Completed'
-        )
-        db.session.add(new_payment)
-        db.session.flush() 
-
-        new_order = Order(
-            payment_id=new_payment.payment_id,
-            user_id=user_id,
-            total_amount=total_amount,
-            status='Completed'
-        )
-        db.session.add(new_order)
-        db.session.flush()  
-
-        for cart_item in cart_items:
-            order_item = OrderItem(
-                order_id=new_order.order_id,
-                product_id=cart_item.product_id,
-                quantity=cart_item.quantity,
-                price_per_item=cart_item.product.price
-            )
-            db.session.add(order_item)
-
-        db.session.commit()
-
-        flash(f'Payment successful! ₹{total_amount} paid via {payment_method}', 'success')
-        user = db.session.get(User, user_id)
-
-        try:
-            msg=Message(
-                subject="Order Confirmation - Sudhamrit Dairy Farm",
-                recipients=[user.email],
-                sender=app.config['MAIL_DEFAULT_SENDER']
-            )
-            msg.body=f"""
-            Hello {user.username},
-
-            Thank You for your order with Sudhamrit Dairy Farm!
-
-            Your Order #{new_order.order_id} has been successfully placed and will be processed soon.
-
-            Order Details:
-            - Order ID: {new_order.order_id}
-            - Total Amount: ₹{total_amount}
-            - Payment Method: {payment_method}
-            - Order Date: {new_order.order_date.strftime('%Y-%m-%d %H:%M')}
-
-            Your fresh dairy products will be delivered to:
-            {user.address}
-
-            Thank You for shopping with us!
-
-            Best Regards,
-            Sudhamrit Dairy Farm Team
-            Phone: +91-XXXXXXXXXX
-            Email: sudhamritdairy@gmail.com
-            """
-
-            mail.send(msg)
-            print(f"Email sent successfully to {user.email}")  # Debug log
-            flash(f'Payment successful! ₹{total_amount} paid via {payment_method}. Confirmation email sent.', 'success')
-        except Exception as mail_error:
-            print(f"Email sending failed: {mail_error}")  # Debug log
-            flash(f'Order confirmed but email failed to send: {mail_error}', 'warning')
-        return render_template('confirm_order.html', 
-                             user=user, 
-                             total=total_amount, 
-                             payment_method=payment_method,
-                             order_id=new_order.order_id)
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Payment failed: {str(e)}', 'danger')
-        return redirect(url_for('payment'))
 
 @app.route('/test_email')
 def test_email():
@@ -841,6 +695,26 @@ def test_email():
         return "Test email sent successfully! Check your inbox."
     except Exception as e:
         return f"Email sending failed: {str(e)}"
+
+@app.route('/test_payment_flow')
+def test_payment_flow():
+    """Test route to check if payment flow works"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return "Please log in first"
+    
+    cart_items = Cart.query.filter_by(user_id=user_id).all()
+    total_amount = session.get('payment_amount', 0)
+    
+    return f"""
+    <h3>Payment Flow Test</h3>
+    <p>User ID: {user_id}</p>
+    <p>Cart Items: {len(cart_items)}</p>
+    <p>Total Amount in Session: {total_amount}</p>
+    <p>Mail Config - Server: {app.config.get('MAIL_SERVER')}</p>
+    <p>Mail Config - Username: {app.config.get('MAIL_USERNAME')}</p>
+    <p>Mail Config - Default Sender: {app.config.get('MAIL_DEFAULT_SENDER')}</p>
+    """
     
 @app.route('/orders',methods=['GET','POST'])
 def orders():
@@ -884,7 +758,7 @@ if __name__=='__main__':
     with app.app_context():
         try:
             db.create_all()
-            print("✅ Database tables created successfully!")
+            print("Database tables created successfully!")
         except Exception as e:
-            print(f"❌ Error creating database tables: {e}")
+            print(f"Error creating database tables: {e}")
     app.run(debug=True)

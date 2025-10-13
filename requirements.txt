@@ -3,6 +3,5 @@ Flask-SQLAlchemy
 Flask-Login
 Flask-Mail
 Werkzeug
-razorpay
 python-dotenv
 gunicorn

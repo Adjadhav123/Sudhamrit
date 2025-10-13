@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Payment - Sudhamrit Dairy Farm</title>
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -38,8 +37,23 @@
       font-size: 1.2em;
       color: #28a745;
     }
+    .payment-method {
+      margin: 20px 0;
+    }
+    .payment-method label {
+      display: block;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    .payment-method select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+    }
     .pay-btn {
-      background-color: #007bff;
+      background-color: #28a745;
       color: white;
       padding: 15px 30px;
       border: none;
@@ -50,22 +64,20 @@
       transition: background-color 0.3s;
     }
     .pay-btn:hover {
-      background-color: #0056b3;
+      background-color: #218838;
     }
-    .pay-btn:disabled {
-      background-color: #6c757d;
-      cursor: not-allowed;
-    }
-    .loading {
-      display: none;
-      text-align: center;
-      margin-top: 10px;
+    .payment-info {
+      background-color: #e7f3ff;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      border-left: 4px solid #007bff;
     }
   </style>
 </head>
 <body>
   <div class="payment-container">
-    <h2>Complete Your Payment</h2>
+    <h2>Complete Your Order</h2>
     
     <div class="order-summary">
       <h3>Order Summary</h3>
@@ -81,69 +93,51 @@
       </div>
     </div>
 
-    <button id="payBtn" class="pay-btn">Pay ₹{{ "%.2f"|format(total) }} with Razorpay</button>
-    <div class="loading" id="loading">
-      <p>Processing payment... Please wait.</p>
+    <div class="payment-info">
+      <h4>📍 Delivery Information</h4>
+      <p><strong>Delivery Address:</strong> {{ user.address }}</p>
+      <p><strong>Contact:</strong> {{ user.phone }}</p>
+      <p><strong>Email:</strong> {{ user.email }}</p>
     </div>
+
+    <form action="/payment_success" method="POST" id="paymentForm">
+      <div class="payment-method">
+        <label for="payment_method">Choose Payment Method:</label>
+        <select name="payment_method" id="payment_method" required>
+          <option value="Cash on Delivery">💰 Cash on Delivery</option>
+          <option value="Online Payment">💳 Online Payment (Pay on Delivery)</option>
+          <option value="Bank Transfer">🏦 Bank Transfer</option>
+        </select>
+      </div>
+      
+      <button type="submit" class="pay-btn" id="submitBtn">
+        🛒 Place Order for ₹{{ "%.2f"|format(total) }}
+      </button>
+      
+      <div id="loadingMsg" style="display:none; text-align:center; margin-top:15px; color:#007bff;">
+        <p>⏳ Processing your order... Please wait.</p>
+      </div>
+    </form>
+    </form>
   </div>
 
-  <!-- Hidden form for payment success -->
-  <form id="successForm" action="/payment_success" method="POST" style="display:none;">
-    <input type="hidden" name="razorpay_payment_id" id="razorpay_payment_id">
-    <input type="hidden" name="razorpay_order_id" id="razorpay_order_id">
-    <input type="hidden" name="razorpay_signature" id="razorpay_signature">
-  </form>
-
   <script>
-    document.getElementById("payBtn").onclick = function(e) {
-      e.preventDefault();
+    // Add loading state and form validation
+    document.getElementById('paymentForm').addEventListener('submit', function(e) {
+      const submitBtn = document.getElementById('submitBtn');
+      const loadingMsg = document.getElementById('loadingMsg');
+      const paymentMethod = document.getElementById('payment_method').value;
       
-      // Disable button and show loading
-      document.getElementById("payBtn").disabled = true;
-      document.getElementById("loading").style.display = "block";
+      console.log('✅ Form submitted with payment method:', paymentMethod);
       
-      var options = {
-        "key": "{{ razorpay_key_id }}",
-        "amount": "{{ (total * 100)|int }}",
-        "currency": "INR",
-        "name": "Sudhamrit Dairy Farm",
-        "description": "Purchase of Fresh Dairy Products",
-        "order_id": "{{ razorpay_order_id }}",
-        "handler": function (response){
-          // Payment successful
-          document.getElementById('razorpay_payment_id').value = response.razorpay_payment_id;
-          document.getElementById('razorpay_order_id').value = response.razorpay_order_id;
-          document.getElementById('razorpay_signature').value = response.razorpay_signature;
-          document.getElementById('successForm').submit();
-        },
-        "prefill": {
-          "name": "{{ user.username }}",
-          "email": "{{ user.email }}",
-          "contact": "{{ user.phone }}"
-        },
-        "theme": { 
-          "color": "#007bff" 
-        },
-        "modal": {
-          "ondismiss": function(){
-            // Re-enable button if payment is cancelled
-            document.getElementById("payBtn").disabled = false;
-            document.getElementById("loading").style.display = "none";
-          }
-        }
-      };
+      // Show loading state
+      submitBtn.innerHTML = '⏳ Processing Order...';
+      submitBtn.disabled = true;
+      loadingMsg.style.display = 'block';
       
-      var rzp1 = new Razorpay(options);
-      
-      rzp1.on('payment.failed', function (response){
-        alert('Payment failed: ' + response.error.description);
-        // Re-enable button on failure
-        document.getElementById("payBtn").disabled = false;
-        document.getElementById("loading").style.display = "none";
-      });
-      
-      rzp1.open();
-    }
+      // Scroll to top to show any messages
+      window.scrollTo(0, 0);
+    });
   </script>
 </body>
 </html>

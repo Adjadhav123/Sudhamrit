@@ -47,10 +47,6 @@ class Payment(db.Model):
     payment_date=db.Column(db.DateTime,default=datetime.utcnow)
     payment_method=db.Column(db.String(50))
     status=db.Column(db.String(50),default='Pending')
-    # Razorpay specific fields
-    razorpay_order_id=db.Column(db.String(100))
-    razorpay_payment_id=db.Column(db.String(100))
-    razorpay_signature=db.Column(db.String(200))
     user=db.relationship('User',backref=db.backref('payments',lazy=True))
 
 

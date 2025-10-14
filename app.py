@@ -542,28 +542,28 @@ def payment_success():
         return redirect(url_for('login'))
     
     payment_method = request.form.get('payment_method')
-    print(f"✅ Processing payment for user {user.username} (ID: {user_id})")
-    print(f"✅ Payment method: {payment_method}")
+    print(f"Processing payment for user {user.username} (ID: {user_id})")
+    print(f"Payment method: {payment_method}")
 
     try:
         cart_items = Cart.query.filter_by(user_id=user.user_id).all()
         total_amount = session.get('payment_amount', 0)
         
-        print(f"✅ Found {len(cart_items)} items in cart")
-        print(f"✅ Total amount: ₹{total_amount}")
+        print(f"Found {len(cart_items)} items in cart")
+        print(f"Total amount: ₹{total_amount}")
 
         if not cart_items:
-            print("❌ Cart is empty")
+            print("Cart is empty")
             flash('Your cart is empty.', 'warning')
             return redirect(url_for('products'))
         
         if total_amount <= 0:
-            print("❌ Invalid payment amount")
+            print("Invalid payment amount")
             flash('Invalid payment amount.', 'danger')
             return redirect(url_for('cart'))
         
         # Step 1: Create Payment Record
-        print("✅ Creating payment record...")
+        print("Creating payment record...")
         new_payment = Payment(
             user_id=user.user_id,
             amount=total_amount,
@@ -611,11 +611,11 @@ def payment_success():
         email_sent = False
         
         if os.getenv('FLASK_ENV') == 'production':
-            print("⚠️ Skipping email in production environment")
-            flash("⚠️ Order placed successfully! You will receive confirmation via SMS/WhatsApp.", "warning")
+            print("Skipping email in production environment")
+            flash("Order placed successfully! You will receive confirmation via SMS/WhatsApp.", "warning")
         else:
             try:
-                print("✅ Attempting to send confirmation email...")
+                print("Attempting to send confirmation email...")
                 
                 msg = Message(
                     subject="Order Confirmation - Sudhamrit Dairy Farm",
@@ -649,15 +649,15 @@ Phone: +91-XXXXXXXXXX
                 
                 mail.send(msg)
                 email_sent = True
-                print("✅ Confirmation email sent successfully!")
-                flash("📧 Order confirmation email sent!", "info")
+                print("Confirmation email sent successfully!")
+                flash("Order confirmation email sent!", "info")
                 
             except Exception as mail_error:
-                print(f"❌ Email sending failed: {mail_error}")
-                flash("⚠️ Order placed successfully! Email notification will be sent separately.", "warning")
+                print(f"Email sending failed: {mail_error}")
+                flash("Order placed successfully! Email notification will be sent separately.", "warning")
 
-        print("✅ Redirecting to confirmation page...")
-        
+        print("Redirecting to confirmation page...")
+
         # Get order items with product details for the confirmation page
         order_items = OrderItem.query.filter_by(order_id=new_order.order_id).all()
         
@@ -747,22 +747,22 @@ def marked_delivery(order_id):
             flash(f"Error updating order status: {str(e)}",'danger')
         return redirect(url_for('orders'))
     return redirect(url_for('orders'))
-@app.route('/test_db')
-def test_db():
-    try:
-        users = User.query.all()
-        products = Product.query.all()
-        carts = Cart.query.all()
+# @app.route('/test_db')
+# def test_db():
+#     try:
+#         users = User.query.all()
+#         products = Product.query.all()
+#         carts = Cart.query.all()
         
-        return f"""
-        <h2>Database Test Results:</h2>
-        <p>Users: {len(users)}</p>
-        <p>Products: {len(products)}</p>
-        <p>Cart Items: {len(carts)}</p>
-        <p>Current Session: {dict(session)}</p>
-        """
-    except Exception as e:
-        return f"Database Error: {str(e)}"
+#         return f"""
+#         <h2>Database Test Results:</h2>
+#         <p>Users: {len(users)}</p>
+#         <p>Products: {len(products)}</p>
+#         <p>Cart Items: {len(carts)}</p>
+#         <p>Current Session: {dict(session)}</p>
+#         """
+#     except Exception as e:
+#         return f"Database Error: {str(e)}"
     
 @app.route('/save_location',methods=['GET','POST'])
 def save_location():
@@ -793,8 +793,6 @@ def save_location():
      return jsonify({'message': 'Location saved successfully!'}), 200
      return render_template('payment.html',user=user,cart_items=cart_items,total=total_amount,google_maps_api_key=os.getenv("GOOGLE_MAPS_API_KEY"))
 
-     
-    
         
 if __name__=='__main__':
     with app.app_context():

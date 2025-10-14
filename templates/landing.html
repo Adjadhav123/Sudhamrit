@@ -2,7 +2,7 @@
 <html lang="en" class="h-100" data-bs-theme="auto">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=yes, minimum-scale=1, maximum-scale=5" />
     <title>Sudhamrit Dairy Farm</title>
 
     <!-- Google Fonts -->
@@ -13,6 +13,9 @@
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+    <!-- Custom Responsive CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}" />
 
     <style>
       :root {
@@ -405,5 +408,7 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Mobile Enhancements -->
+    <script src="{{ url_for('static', filename='js/mobile-enhancements.js') }}"></script>
   </body>
 </html>

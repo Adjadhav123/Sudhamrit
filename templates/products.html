@@ -2,7 +2,7 @@
 <html lang="en" class="h-100" data-bs-theme="auto">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=yes, minimum-scale=1, maximum-scale=5" />
     <title>Sudhamrit Dairy Farm</title>
 
     <!-- Google Fonts -->
@@ -13,6 +13,9 @@
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+    <!-- Custom Responsive CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}" />
 
     <style>
       :root {
@@ -462,7 +465,7 @@
         <div class="row g-4" id="productsContainer">
           {% if products %}
             {% for product in products %}
-            <div class="col-md-4 product-card" data-category="{{ product.category.lower() }}" data-name="{{ product.product_name }}">
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3 product-card" data-category="{{ product.category.lower() }}" data-name="{{ product.product_name }}">
               <div class="card h-100 border-0 shadow-sm rounded-4">
                 {% if product.product_image %}
                   <img src="{{ url_for('static', filename='images/' + product.product_image) }}" class="card-img-top rounded-top-4" alt="{{ product.product_name }}">
@@ -483,7 +486,7 @@
           {% else %}
             <!-- Show default products if no products in database -->
             <!-- Product 1 - Milk -->
-            <div class="col-md-4 product-card" data-category="dairy" data-name="Fresh Cow Milk">
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3 product-card" data-category="dairy" data-name="Fresh Cow Milk">
               <div class="card h-100 border-0 shadow-sm rounded-4">
                 <img src="{{ url_for('static', filename='images/milk_bottle.png') }}" class="card-img-top rounded-top-4" alt="Fresh Milk Bottle">
                 <div class="card-body">
@@ -495,7 +498,7 @@
             </div>
 
             <!-- Product 2 - Curd -->
-            <div class="col-md-4 product-card" data-category="dairy" data-name="Natural Curd">
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3 product-card" data-category="dairy" data-name="Natural Curd">
               <div class="card h-100 border-0 shadow-sm rounded-4">
                 <img src="{{ url_for('static',filename='images/curd.png') }}" class="card-img-top rounded-top-4" alt="Curd">
                 <div class="card-body">
@@ -507,7 +510,7 @@
             </div>
 
             <!-- Product 3 - Ghee -->
-            <div class="col-md-4 product-card" data-category="dairy" data-name="Pure Desi Ghee">
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3 product-card" data-category="dairy" data-name="Pure Desi Ghee">
               <div class="card h-100 border-0 shadow-sm rounded-4">
                 <img src="{{ url_for('static',filename='images/desi_ghee.png') }}" class="card-img-top rounded-top-4" alt="Ghee">
                 <div class="card-body">
@@ -519,7 +522,7 @@
             </div>
 
             <!-- Product 4 - Paneer -->
-            <div class="col-md-4 product-card" data-category="dairy" data-name="Paneer">
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3 product-card" data-category="dairy" data-name="Paneer">
               <div class="card h-100 border-0 shadow-sm rounded-4">
                 <img src="{{ url_for('static',filename='images/paneer.png') }}" class="card-img-top rounded-top-4" alt="Paneer">
                 <div class="card-body">
@@ -531,7 +534,7 @@
             </div>
 
             <!-- Product 5 - Ice Cream -->
-            <div class="col-md-4 product-card" data-category="frozen" data-name="Delicious Ice Cream">
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3 product-card" data-category="frozen" data-name="Delicious Ice Cream">
               <div class="card h-100 border-0 shadow-sm rounded-4">
                 <img src="{{ url_for('static',filename='images/ice_creams.png') }}" class="card-img-top rounded-top-4" alt="Ice Cream">
                 <div class="card-body">
@@ -543,7 +546,7 @@
             </div>
 
             <!-- Product 6 - Pedha -->
-            <div class="col-md-4 product-card" data-category="sweets" data-name="Pedha">
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3 product-card" data-category="sweets" data-name="Pedha">
               <div class="card h-100 border-0 shadow-sm rounded-4">
                 <img src="{{ url_for('static',filename='images/kandi_pedha.png') }}" class="card-img-top rounded-top-4" alt="Pedha">
                 <div class="card-body">
@@ -587,6 +590,8 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Mobile Enhancements -->
+    <script src="{{ url_for('static', filename='js/mobile-enhancements.js') }}"></script>
 
     <script>
       // Search and Filter Functionality
